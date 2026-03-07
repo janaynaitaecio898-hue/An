@@ -197,37 +197,59 @@ def render_home_page():
 
 
 class RequestHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
+    def _send_bytes(self, payload: bytes, content_type: str, write_body: bool = True):
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        if write_body:
+            self.wfile.write(payload)
+
+    def _get_css_bytes(self):
+        css_path = os.path.join(os.path.dirname(__file__), "static", "style.css")
+        if not os.path.exists(css_path):
+            return None
+        with open(css_path, "rb") as f:
+            return f.read()
+
+    def do_HEAD(self):
         if self.path == "/":
             content = render_home_page().encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(content)))
-            self.end_headers()
-            self.wfile.write(content)
+            self._send_bytes(content, "text/html; charset=utf-8", write_body=False)
             return
 
         if self.path == "/api/articles":
             payload = json.dumps(list_articles(), ensure_ascii=False).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
+            self._send_bytes(payload, "application/json; charset=utf-8", write_body=False)
             return
 
         if self.path == "/static/style.css":
-            css_path = os.path.join(os.path.dirname(__file__), "static", "style.css")
-            if not os.path.exists(css_path):
+            data = self._get_css_bytes()
+            if data is None:
                 self.send_error(404, "Not Found")
                 return
-            with open(css_path, "rb") as f:
-                data = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/css; charset=utf-8")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
+            self._send_bytes(data, "text/css; charset=utf-8", write_body=False)
+            return
+
+        self.send_error(404, "Not Found")
+
+    def do_GET(self):
+        if self.path == "/":
+            content = render_home_page().encode("utf-8")
+            self._send_bytes(content, "text/html; charset=utf-8")
+            return
+
+        if self.path == "/api/articles":
+            payload = json.dumps(list_articles(), ensure_ascii=False).encode("utf-8")
+            self._send_bytes(payload, "application/json; charset=utf-8")
+            return
+
+        if self.path == "/static/style.css":
+            data = self._get_css_bytes()
+            if data is None:
+                self.send_error(404, "Not Found")
+                return
+            self._send_bytes(data, "text/css; charset=utf-8")
             return
 
         self.send_error(404, "Not Found")
